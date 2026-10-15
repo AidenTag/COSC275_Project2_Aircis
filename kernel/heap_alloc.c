@@ -98,9 +98,39 @@ void* allocate (int size) {
   void* ptr = NULL;
   
   /* TO BE COMPLETED */
+
+  void* cursor = statics_limit;
+  word_t current_block_size = *(word_t*)cursor;
+
+  while (
+    /* keep advancing when... */
+    (current_block_size > 0 /* in use */ || current_block_size < size) /* too small */ 
+    &&
+    /* but leave if ever not... */
+    cursor < heap_limit /* in existing blocks */
+  ) {
+    cursor += current_block_size + 4;
+    current_block_size = *(word_t*)cursor;
+  }
+
+  /* Word at cursor becomes header for new block (which just means we bump heap_limit) if we're at the heap_limit  */
+  ptr = cursor + 4;
+  *(word_t*)cursor = size; /* update header */
+  if (cursor >= heap_limit) {
+    heap_limit += size + 4;
+  }
+
+
   
-  ptr = heap_limit;
-  heap_limit += size; 
+
+  /* Could be that we run into the stack, in which case heap_limit + 4 + size > sp */
+
+  *(word_t*)heap_limit = size; /* then to deallocate we make it negative */
+  
+
+  
+
+  
 
   /* Assuming that `ptr` has been set to point to a newly allocated block, show its address and then return it. */
   print_hex((word_t)ptr);
@@ -109,7 +139,6 @@ void* allocate (int size) {
   
 } /* allocate () */
 /* =============================================================================================================================== */
-
 
 
 /* =============================================================================================================================== */
@@ -125,6 +154,8 @@ void deallocate (void* ptr) {
   header_s* header;
   
   /* TO BE COMPLETED */
+  
+
 
   print_dec(header->size);
   print("]\n");
