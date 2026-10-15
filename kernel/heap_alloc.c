@@ -154,8 +154,14 @@ void deallocate (void* ptr) {
   header_s* header;
   
   /* TO BE COMPLETED */
-  
+  ptr -= 4; /* make sure we're pointing to the header not the start of the data in the block */
 
+  word_t ptr_block_header_val = *(word_t*)ptr;
+  if (ptr_block_header_val > 0) {
+    *(word_t*)ptr *= -1; /* make it negative */
+  } else {
+    print("Cannot deallocate deallocated block.");
+  }
 
   print_dec(header->size);
   print("]\n");
