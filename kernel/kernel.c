@@ -21,6 +21,7 @@
 #define SYSCALL_NOOP    0xca110000
 #define SYSCALL_EXIT	0xca110001
 #define SYSCALL_PRINT   0xca110002
+#define SYSCALL_RUN     0xca110003
 
 #define SYSCALL_INVALID_CODE -1
 
@@ -184,6 +185,10 @@ void do_syscall (word_t code, word_t arg0) {
     
     has_return_value = true;
     result = do_print((address_t)arg0);
+
+  } else if (code == SYSCALL_RUN) {
+    
+    do_run((address_t)arg0);
 
   } else {
     

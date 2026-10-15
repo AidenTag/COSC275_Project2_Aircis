@@ -98,6 +98,9 @@ void* allocate (int size) {
   void* ptr = NULL;
   
   /* TO BE COMPLETED */
+  
+  ptr = heap_limit;
+  heap_limit += size; 
 
   /* Assuming that `ptr` has been set to point to a newly allocated block, show its address and then return it. */
   print_hex((word_t)ptr);
