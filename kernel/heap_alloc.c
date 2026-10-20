@@ -31,7 +31,7 @@
 
 #define HEADER_TO_BLOCK(p) ((void*)((address_t)(p) + sizeof(header_s)))
 #define BLOCK_TO_HEADER(p) ((header_s*)((address_t)(p) - sizeof(header_s)))
-#define HEAP_STACK_MARGIN 0x400
+
 
 
 /* =============================================================================================================================== */
@@ -84,7 +84,7 @@ void heap_init () {
   /* begins after statics */
   heap_start = ALIGN_UP((address_t)&statics_limit);
 
-  heap_ceiling = kernel_limit - HEAP_STACK_MARGIN;
+  heap_ceiling = kernel_limit;
 
   /* at beginning, limit = start */
   heap_limit = (address_t)heap_start;
