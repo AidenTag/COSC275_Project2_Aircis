@@ -32,18 +32,6 @@
 #define PRESERVED_A0_OFFSET ( -(10 - 2 + 1) * BYTES_PER_WORD )
 /* =============================================================================================================================== */
 
-
-
-/* =============================================================================================================================== */
-/* GLOBALS */
-
-word_t next_ROM_number = INIT_ROM_NUMBER;
-
-address_t user_base    = 0;
-address_t user_limit   = 0;
-word_t    user_size    = 0;
-word_t    next_id      = 0;
-
 /* =============================================================================================================================== */
 /* TYPES & STRUCTS */
 
@@ -64,6 +52,21 @@ typedef struct process_info_object {
 
 
 /* =============================================================================================================================== */
+/* GLOBALS */
+
+word_t next_ROM_number = INIT_ROM_NUMBER;
+
+address_t user_base    = 0;
+address_t user_limit   = 0;
+word_t    user_size    = 0;
+word_t    next_id      = 0;
+process_info_object_s* current_process = NULL;
+
+
+
+
+
+/* =============================================================================================================================== */
 /**
  * Schedule (jump into) the current process.
  */
@@ -75,6 +78,56 @@ void cpu_scheduler () {
 } // cpu_scheduler ()
 /* =============================================================================================================================== */
 
+
+word_t do_run (word_t ROM_number) {
+  print("[kernel:] RUN ROM #");
+  print_dec(ROM_number);
+  print("\n");
+
+  /* Lookup the ROM.  If it isn't a valid ROM number, halt the system. */
+  dt_entry_s* dt_ROM_ptr = find_device(ROM_device_code, ROM_number);
+  if (dt_ROM_ptr == NULL) {
+    return -1;
+  }
+
+  address_t base = mm_allocate(); /* size is fixed (32 kb) */
+
+  if (base == 0) {
+    print("[kernel:] Main memory allocation failed for ROM #");
+    print_dec(ROM_number);
+    print("\n");
+    return -3;
+  }
+
+  /* Load the executable into the process's space. */  
+  DMA_portal_ptr->src    = dt_ROM_ptr->base;
+  DMA_portal_ptr->dst    = base; // Should copy to address specified by mm_allocate
+  DMA_portal_ptr->length = dt_ROM_ptr->limit - dt_ROM_ptr->base; // Trigger
+
+  process_info_object_s* process = allocate(sizeof(process_info_object_s));
+
+  if (process == NULL) {
+    print("[kernel:] Process allocation failed for ROM #");
+    print_dec(ROM_number);
+    print("\n");
+    return -2;
+  }
+
+  process->epc = 0;
+  process->sp = dt_ROM_ptr->limit - dt_ROM_ptr->base;
+  process->bs = base;
+  process->lm = base + dt_ROM_ptr->limit;
+  process->id = next_id;
+  process->next = NULL;
+
+  if (current_process != NULL) {
+    current_process->next = process;
+  }
+
+  current_process = process;
+
+  return next_id++;
+}
 
 
 /* =============================================================================================================================== */
@@ -145,9 +198,6 @@ void do_exit (word_t status) {
 } /* do_exit () */
 /* =============================================================================================================================== */
 
-int do_run (int ROM_number) {
-
-}
 
 /* =============================================================================================================================== */
 /**
