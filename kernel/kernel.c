@@ -35,7 +35,6 @@
 /* =============================================================================================================================== */
 /* TYPES & STRUCTS */
 
-/* For free blocks. */
 typedef struct process_info_object {
 
   word_t epc;
@@ -59,8 +58,11 @@ word_t next_ROM_number = INIT_ROM_NUMBER;
 address_t user_base    = 0;
 address_t user_limit   = 0;
 word_t    user_size    = 0;
-word_t    next_id      = 0;
-process_info_object_s* current_process = NULL;
+int    next_id      = 0;
+
+process_info_object_s* latest_process = NULL; // this is the tail of the circular linked list
+
+process_info_object_s* current_process = NULL; // this is the actual process that is running
 
 
 
@@ -79,30 +81,25 @@ void cpu_scheduler () {
 /* =============================================================================================================================== */
 
 
-word_t do_run (word_t ROM_number) {
+int do_run (int ROM_number) {
+
+  preserved_epc += 4; /* advance the process PC just like with other do_ functions, but upfront cuz we have many conditional returns */
+
   print("[kernel:] RUN ROM #");
   print_dec(ROM_number);
   print("\n");
 
-  /* Lookup the ROM.  If it isn't a valid ROM number, halt the system. */
-  dt_entry_s* dt_ROM_ptr = find_device(ROM_device_code, ROM_number);
-  if (dt_ROM_ptr == NULL) {
+  // Following spec, this function should only be used to run ROMs AFTER the init ROM.
+  if (ROM_number <= INIT_ROM_NUMBER) {
+    print("[kernel:] Invalid ROM number\n");
     return -1;
   }
 
-  address_t base = mm_allocate(); /* size is fixed (32 kb) */
-
-  if (base == 0) {
-    print("[kernel:] Main memory allocation failed for ROM #");
-    print_dec(ROM_number);
-    print("\n");
-    return -3;
+  dt_entry_s* dt_ROM_ptr = find_device(ROM_device_code, ROM_number);
+  if (dt_ROM_ptr == NULL) {
+    print("[kernel:] Invalid ROM number\n");
+    return -1;
   }
-
-  /* Load the executable into the process's space. */  
-  DMA_portal_ptr->src    = dt_ROM_ptr->base;
-  DMA_portal_ptr->dst    = base; // Should copy to address specified by mm_allocate
-  DMA_portal_ptr->length = dt_ROM_ptr->limit - dt_ROM_ptr->base; // Trigger
 
   process_info_object_s* process = allocate(sizeof(process_info_object_s));
 
@@ -113,18 +110,49 @@ word_t do_run (word_t ROM_number) {
     return -2;
   }
 
-  process->epc = 0;
-  process->sp = dt_ROM_ptr->limit - dt_ROM_ptr->base;
-  process->bs = base;
-  process->lm = base + dt_ROM_ptr->limit;
-  process->id = next_id;
-  process->next = NULL;
+  address_t base = mm_allocate(); /* size is fixed (32 kb) */
 
-  if (current_process != NULL) {
-    current_process->next = process;
+  if (base == 0) {
+    deallocate(process); // free the process allocation since we can't allocate memory for the ROM
+    print("[kernel:] Main memory allocation failed for ROM #");
+    print_dec(ROM_number);
+    print("\n");
+    return -3;
   }
 
-  current_process = process;
+  word_t size = dt_ROM_ptr->limit - dt_ROM_ptr->base;
+
+
+  /* Wanted to put this check here just in case */
+  if (size > MM_BLOCK_SIZE) {
+    deallocate(process); // free the process allocation since we can't allocate memory for the ROM
+    mm_deallocate(base); // free the memory allocation since we can't allocate memory for the ROM
+    print("[kernel:] ROM #");
+    print_dec(ROM_number);
+    print(" is too large to fit in main memory\n");
+    return -4;
+  }
+
+  /* Load the executable into the process's space. */  
+  DMA_portal_ptr->src    = dt_ROM_ptr->base;
+  DMA_portal_ptr->dst    = base; // Should copy to address specified by mm_allocate
+  DMA_portal_ptr->length = size; // Trigger
+
+  process->epc = 0;
+  process->sp = MM_BLOCK_SIZE; /* stack pointer starts at the top of the allocated space */
+  process->bs = base;
+  process->lm = base + MM_BLOCK_SIZE;
+  process->id = next_id;
+
+  if (latest_process == NULL) {
+    process->next = process; /* first process points to itself */
+    current_process = process; /* first process can be assigned the current process cuz it'll run first */
+  } else {
+    process->next = latest_process->next; /* between latest and first */
+    latest_process->next = process;
+  }
+
+  latest_process = process;
 
   return next_id++;
 }
@@ -256,8 +284,8 @@ void do_syscall (word_t code, word_t arg0) {
     result = do_print((address_t)arg0);
 
   } else if (code == SYSCALL_RUN) {
-    
-    do_run((address_t)arg0);
+    has_return_value = true;
+    result = do_run((int)arg0);
 
   } else {
     
