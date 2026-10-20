@@ -63,7 +63,7 @@ header_s free_tail = { .next = NULL, .prev = NULL, .size = 0 };
 /* The current limit of the heap. */
 address_t heap_start = 0;
 address_t heap_limit = (address_t)NULL;
-address_t heap_ceiling = 0;
+
 
 
 /* The externally provided end of the statics, at which the heap will begin. */
@@ -84,7 +84,6 @@ void heap_init () {
   /* begins after statics */
   heap_start = ALIGN_UP((address_t)&statics_limit);
 
-  heap_ceiling = kernel_limit;
 
   /* at beginning, limit = start */
   heap_limit = (address_t)heap_start;
@@ -139,7 +138,7 @@ void* allocate (int size) {
       *(int32_t*)cursor = -(*(int32_t*)cursor);
     } else {
       /*else, need to add new block at end of heap*/
-      if (heap_ceiling - heap_limit >= sizeof(header_s)+rounded){
+      if (kernel_limit - heap_limit >= sizeof(header_s)+rounded){
         *(int32_t*)heap_limit = rounded;
         ptr = HEADER_TO_BLOCK(heap_limit);
         heap_limit += sizeof(header_s) + rounded;
