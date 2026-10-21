@@ -220,8 +220,18 @@ void do_exit (word_t status) {
   print_dec(status);
   print("\n");
 
+  /* Deallocate the process's memory. */
+  mm_deallocate(current_process->bs); // main memory
+  deallocate(current_process); // process info object
+
+  current_process = current_process->next; /* move to the next process in the circular linked list */
+  preserved_epc = current_process->epc;
+  preserved_sp = current_process->sp;
+  user_base = current_process->bs;
+  user_limit = current_process->lm;
+
   /* Advance to the next ROM. */
-  run_next();
+  cpu_scheduler();
 
 } /* do_exit () */
 /* =============================================================================================================================== */
@@ -315,6 +325,13 @@ void do_alarm () {
 
   /* Print a little info and then resume. */
   print("[kernel:] ALARM interrupt caught\n");
+
+  current_process = current_process->next; /* move to the next process in the circular linked list */
+  preserved_epc = current_process->epc;
+  preserved_sp = current_process->sp;
+  user_base = current_process->bs;
+  user_limit = current_process->lm;
+  
   cpu_scheduler();
   
 } // do_alarm ()
