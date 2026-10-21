@@ -473,7 +473,13 @@ main_with_console:
 	csrs		md,		t0
 	
 	## Call run_programs() to invoke each program ROM in turn.
-	call		run_init
+
+	call heap_test
+
+	halt
+
+	## Comment out to test heap allocater
+	## call		run_init 
 ### ================================================================================================================================
 	
 
