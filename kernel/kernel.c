@@ -25,6 +25,8 @@
 
 #define SYSCALL_INVALID_CODE -1
 
+#define QUANTUM 20 //what to set this value as??
+
 /**
  * The offset of where `a0` is stored on the preservation stack relative to `sp`.  `a0 = x10`, so it is the 10th register,
  * subtracting the 2 that are not preserved (`zero` and `sp` itself), plus 1 for starting one full word back from `sp`.
@@ -60,7 +62,7 @@ address_t user_limit   = 0;
 word_t    user_size    = 0;
 int    next_id      = 0;
 
-process_info_object_s* latest_process = NULL; // this is the tail of the circular linked list
+//we chose to remove latest_process
 
 process_info_object_s* current_process = NULL; // this is the actual process that is running
 
@@ -73,29 +75,15 @@ process_info_object_s* current_process = NULL; // this is the actual process tha
  * Schedule (jump into) the current process.
  */
 void cpu_scheduler () {
-
   /* Jump to the current process, giving it a new quantum. */
+  set_alarm(QUANTUM);
   userspace_jump(preserved_epc, preserved_sp, user_base, user_limit);
   
 } // cpu_scheduler ()
 /* =============================================================================================================================== */
-
-
-int do_run (int ROM_number) {
-
-  preserved_epc += 4; /* advance the process PC just like with other do_ functions, but upfront cuz we have many conditional returns */
-
-  print("[kernel:] RUN ROM #");
-  print_dec(ROM_number);
-  print("\n");
-
-  // Following spec, this function should only be used to run ROMs AFTER the init ROM.
-  if (ROM_number <= INIT_ROM_NUMBER) {
-    print("[kernel:] Invalid ROM number\n");
-    return -1;
-  }
-
-  dt_entry_s* dt_ROM_ptr = find_device(ROM_device_code, ROM_number);
+int add_process (int ROM_number) {
+//shared steps for do_run so they can still be carried out for ROM <= 4
+dt_entry_s* dt_ROM_ptr = find_device(ROM_device_code, ROM_number);
   if (dt_ROM_ptr == NULL) {
     print("[kernel:] Invalid ROM number\n");
     return -1;
@@ -144,17 +132,33 @@ int do_run (int ROM_number) {
   process->lm = base + MM_BLOCK_SIZE;
   process->id = next_id;
 
-  if (latest_process == NULL) {
+  if (current_process == NULL) {
     process->next = process; /* first process points to itself */
     current_process = process; /* first process can be assigned the current process cuz it'll run first */
   } else {
-    process->next = latest_process->next; /* between latest and first */
-    latest_process->next = process;
+    process->next = current_process->next; //right after running process
+    current_process->next = process;
   }
 
-  latest_process = process;
 
   return next_id++;
+
+}
+
+int do_run (int ROM_number) {
+
+
+  print("[kernel:] RUN ROM #");
+  print_dec(ROM_number);
+  print("\n");
+
+  // Following spec, this function should only be used to run ROMs AFTER the init ROM.
+  if (ROM_number <= INIT_ROM_NUMBER) {
+    print("[kernel:] Invalid ROM number\n");
+    return -1;
+  }
+
+  return add_process(ROM_number);
 }
 
 
@@ -218,13 +222,24 @@ void do_exit (word_t status) {
 
   print("[kernel:] EXIT process with status ");
   print_dec(status);
-  print("\n");
 
   /* Deallocate the process's memory. */
   mm_deallocate(current_process->bs); // main memory
   deallocate(current_process); // process info object
 
+  //if curr_process->next = curr_process, has hit the end of the list (its circular so its pointing back at itself), so terminate
+  if (current_process->next == current_process){
+    return;
+  }
+
+  process_info_object_s* process_to_remove = current_process;
+  while (current_process->next != process_to_remove){ //loop to find the prev
+    current_process = current_process->next;
+  }
+  current_process->next = process_to_remove->next; //remove process from linked list
+
   current_process = current_process->next; /* move to the next process in the circular linked list */
+
   preserved_epc = current_process->epc;
   preserved_sp = current_process->sp;
   user_base = current_process->bs;
@@ -326,6 +341,9 @@ void do_alarm () {
   /* Print a little info and then resume. */
   print("[kernel:] ALARM interrupt caught\n");
 
+  //preserve sp, epc in the process  before switching to the new process
+  current_process->epc = preserved_epc;
+  current_process->sp = preserved_sp;
   current_process = current_process->next; /* move to the next process in the circular linked list */
   preserved_epc = current_process->epc;
   preserved_sp = current_process->sp;
