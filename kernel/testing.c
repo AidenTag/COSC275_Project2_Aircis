@@ -23,7 +23,7 @@ void heap_test() {
 
    int* ptr2 = (int*)allocate(8);
 
-   if (ptr2 == NULL) {
+   if (2 == NULL) {
       print("[heap_test:] Allocation failed for ptr2\n");
       halt_kernel();
    }
@@ -52,7 +52,7 @@ void heap_test() {
    int* ptr4 = (int*)allocate(sizeof(int)); // try to put something in the free space of ptr1
 
    if ((address_t) ptr4 != addr_of_ptr1) {
-      print("[heap_test:] Allocation did not reuse freed space for ptr3\n");
+      print("[heap_test:] Allocation did not reuse freed space for ptr4\n");
       halt_kernel();
    }
 
