@@ -25,7 +25,7 @@
 
 #define SYSCALL_INVALID_CODE -1
 
-#define QUANTUM 20 //what to set this value as??
+#define QUANTUM 5000 //what to set this value as??
 
 /**
  * The offset of where `a0` is stored on the preservation stack relative to `sp`.  `a0 = x10`, so it is the 10th register,
@@ -83,16 +83,26 @@ void cpu_scheduler () {
 
 
 /* =============================================================================================================================== */
-int add_process (int ROM_number) {
-//shared steps for do_run so they can still be carried out for ROM <= 4
-dt_entry_s* dt_ROM_ptr = find_device(ROM_device_code, ROM_number);
+
+int do_run (int ROM_number) {
+
+  print("[kernel:] RUN ROM #");
+  print_dec(ROM_number);
+  print("\n");
+
+  /* Reject ROMs 1-3, but only once a process exists. While current_process is NULL, the kernel is booting init (ROM 3). */
+  if (current_process != NULL && ROM_number <= INIT_ROM_NUMBER) {
+    print("[kernel:] Invalid ROM number\n");
+    return -1;
+  }
+
+  dt_entry_s* dt_ROM_ptr = find_device(ROM_device_code, ROM_number);
   if (dt_ROM_ptr == NULL) {
     print("[kernel:] Invalid ROM number\n");
     return -1;
   }
 
   process_info_object_s* process = allocate(sizeof(process_info_object_s));
-
   if (process == NULL) {
     print("[kernel:] Process allocation failed for ROM #");
     print_dec(ROM_number);
@@ -100,10 +110,9 @@ dt_entry_s* dt_ROM_ptr = find_device(ROM_device_code, ROM_number);
     return -2;
   }
 
-  address_t base = mm_allocate(); /* size is fixed (32 kb) */
-
+  address_t base = mm_allocate();
   if (base == 0) {
-    deallocate(process); // free the process allocation since we can't allocate memory for the ROM
+    deallocate(process);
     print("[kernel:] Main memory allocation failed for ROM #");
     print_dec(ROM_number);
     print("\n");
@@ -111,58 +120,32 @@ dt_entry_s* dt_ROM_ptr = find_device(ROM_device_code, ROM_number);
   }
 
   word_t size = dt_ROM_ptr->limit - dt_ROM_ptr->base;
-
-
-  /* Wanted to put this check here just in case */
   if (size > MM_BLOCK_SIZE) {
-    deallocate(process); // free the process allocation since we can't allocate memory for the ROM
-    mm_deallocate(base); // free the memory allocation since we can't allocate memory for the ROM
-    print("[kernel:] ROM #");
-    print_dec(ROM_number);
-    print(" is too large to fit in main memory\n");
+    deallocate(process);
+    mm_deallocate(base);
+    print("[kernel:] ROM is too large to fit in main memory\n");
     return -4;
   }
 
-  /* Load the executable into the process's space. */  
   DMA_portal_ptr->src    = dt_ROM_ptr->base;
-  DMA_portal_ptr->dst    = base; // Should copy to address specified by mm_allocate
-  DMA_portal_ptr->length = size; // Trigger
+  DMA_portal_ptr->dst    = base;
+  DMA_portal_ptr->length = size;   /* triggers the copy */
 
   process->epc = 0;
-  process->sp = MM_BLOCK_SIZE; /* stack pointer starts at the top of the allocated space */
-  process->bs = base;
-  process->lm = base + MM_BLOCK_SIZE;
-  process->id = next_id;
+  process->sp  = MM_BLOCK_SIZE;
+  process->bs  = base;
+  process->lm  = base + MM_BLOCK_SIZE;
+  process->id  = next_id;
 
   if (current_process == NULL) {
-    process->next = process; /* first process points to itself */
-    current_process = process; /* first process can be assigned the current process cuz it'll run first */
+    process->next = process;
+    current_process = process;
   } else {
-    process->next = current_process->next; //right after running process
+    process->next = current_process->next;
     current_process->next = process;
   }
 
-
   return next_id++;
-
-}
-
-int do_run (int ROM_number) {
-
-  print("[kernel:] RUN interrupt caught\n");
-  print("[kernel:] RUN ROM #");
-  print_dec(ROM_number);
-  print("\n");
-
-  preserved_epc += 4;
-
-  // Following spec, this function should only be used to run ROMs AFTER the init ROM.
-  if (ROM_number <= INIT_ROM_NUMBER) {
-    print("[kernel:] Invalid ROM number\n");
-    return -1;
-  }
-
-  return add_process(ROM_number);
 }
 
 
@@ -179,23 +162,34 @@ void run_next () {
   /* Lookup the ROM.  If it isn't a valid ROM number, halt the system. */
   dt_entry_s* dt_ROM_ptr = find_device(ROM_device_code, next_ROM_number);
   if (dt_ROM_ptr == NULL) {
-    print("[kernel:] invalid ROM_ptr");
     return;
   }
 
-  /* Load the executable into the process's space. */  
-  DMA_portal_ptr->src    = dt_ROM_ptr->base;
-  DMA_portal_ptr->dst    = user_base;
-  DMA_portal_ptr->length = dt_ROM_ptr->limit - dt_ROM_ptr->base; // Trigger
+  /* Load the executable into the process's space. */
+  // Project 2: do_run now does this copy, into the new process's own 32 KB block.
+  // DMA_portal_ptr->src    = dt_ROM_ptr->base;
+  // DMA_portal_ptr->dst    = user_base;
+  // DMA_portal_ptr->length = dt_ROM_ptr->limit - dt_ROM_ptr->base; // Trigger
+
+  /* Project 2: create the process through do_run so it gets a record and its own block. */
+  int pid = do_run(next_ROM_number);
+  if (pid < 0) {
+    return;   // run_init then prints "Failed to run, no user ROMs" and halts
+  }
 
   /* Prepare the initial epc and sp. */
-  preserved_epc = 0;
-  preserved_sp  = user_size;
+  // Project 2: take them from the new process's record instead of fixed values.
+  // preserved_epc = 0;
+  // preserved_sp  = user_size;
+  preserved_epc = current_process->epc;
+  preserved_sp  = current_process->sp;
+  user_base     = current_process->bs;
+  user_limit    = current_process->lm;
 
   /* Store the next ROM on deck, then jump to this newly loaded one. */
   next_ROM_number += 1;
   cpu_scheduler();
-  
+
 } /* run_next () */
 /* =============================================================================================================================== */
 
@@ -305,6 +299,7 @@ word_t do_print (address_t msg) {
 
 
 /* =============================================================================================================================== */
+/* =============================================================================================================================== */
 /**
  * Carry out a syscall.  <b>Does not return.</b>
  *
@@ -333,10 +328,11 @@ void do_syscall (word_t code, word_t arg0) {
     result = do_print((address_t)arg0);
 
   } else if (code == SYSCALL_RUN) {
-    has_return_value = true;
-    result = do_run((int)arg0);
-
-  } else {
+  /* Task 3: dispatch RUN and hand do_run's result back to the caller. */
+  has_return_value = true;
+  result = do_run((int)arg0); /* resume the caller after its ecall. Done here, not in do_run, because at boot run_next calls do_run with no caller to advance. */
+  preserved_epc +=4;
+} else {
     
     result = SYSCALL_INVALID_CODE;
     
@@ -350,8 +346,7 @@ void do_syscall (word_t code, word_t arg0) {
 
   /* Schedule a process. */
   cpu_scheduler();
-  
-} /* do_syscall () */
+}/* do_syscall () */
 /* =============================================================================================================================== */
 
 
@@ -380,15 +375,7 @@ void do_alarm () {
 /* =============================================================================================================================== */
 
 
-
-/* =============================================================================================================================== */
-/**
- * Initialize the running of user processes.
- */
 void run_init () {
-
-  int pid = add_process(INIT_ROM_NUMBER);
-
 
   /* Determine the user-space bounds. */
   user_base  = kernel_limit;
