@@ -70,7 +70,7 @@ longloop_L.str.1:
 	.asciz	"\n"
 	.size	longloop_L.str.1, 2
 
-	.ident	"clang version 19.1.7"
+	.ident	"clang version 19.1.6"
 	.section	".note.GNU-stack","",@progbits
 	.addrsig
 	.addrsig_sym print

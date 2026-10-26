@@ -147,7 +147,7 @@ free_list_head:
 	.word	0
 	.size	free_list_head, 4
 
-	.ident	"clang version 19.1.7"
+	.ident	"clang version 19.1.6"
 	.section	".note.GNU-stack","",@progbits
 	.addrsig
 	.addrsig_sym mm_init

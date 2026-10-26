@@ -80,6 +80,8 @@ void cpu_scheduler () {
   userspace_jump(preserved_epc, preserved_sp, user_base, user_limit);
   
 } // cpu_scheduler ()
+
+
 /* =============================================================================================================================== */
 int add_process (int ROM_number) {
 //shared steps for do_run so they can still be carried out for ROM <= 4
@@ -147,10 +149,12 @@ dt_entry_s* dt_ROM_ptr = find_device(ROM_device_code, ROM_number);
 
 int do_run (int ROM_number) {
 
-
+  print("[kernel:] RUN interrupt caught\n");
   print("[kernel:] RUN ROM #");
   print_dec(ROM_number);
   print("\n");
+
+  preserved_epc += 4;
 
   // Following spec, this function should only be used to run ROMs AFTER the init ROM.
   if (ROM_number <= INIT_ROM_NUMBER) {
@@ -175,6 +179,7 @@ void run_next () {
   /* Lookup the ROM.  If it isn't a valid ROM number, halt the system. */
   dt_entry_s* dt_ROM_ptr = find_device(ROM_device_code, next_ROM_number);
   if (dt_ROM_ptr == NULL) {
+    print("[kernel:] invalid ROM_ptr");
     return;
   }
 
@@ -222,28 +227,47 @@ void do_exit (word_t status) {
 
   print("[kernel:] EXIT process with status ");
   print_dec(status);
+  print("\n");
 
-  /* Deallocate the process's memory. */
-  mm_deallocate(current_process->bs); // main memory
-  deallocate(current_process); // process info object
+  process_info_object_s* process_to_remove = current_process;
+
 
   //if curr_process->next = curr_process, has hit the end of the list (its circular so its pointing back at itself), so terminate
-  if (current_process->next == current_process){
+  if (process_to_remove->next == process_to_remove){
+    print("[kernel:] completed all processes. \n");
+    mm_deallocate(process_to_remove->bs); // main memory
+    deallocate(process_to_remove); // process info object
+    current_process = NULL;
     return;
   }
 
-  process_info_object_s* process_to_remove = current_process;
+
   while (current_process->next != process_to_remove){ //loop to find the prev
     current_process = current_process->next;
   }
-  current_process->next = process_to_remove->next; //remove process from linked list
+
+  current_process->next = process_to_remove->next;   /* unlink process_to_remove*/
 
   current_process = current_process->next; /* move to the next process in the circular linked list */
+
+  if (current_process != process_to_remove->next) {
+    print("[kernel:] unlink failed\n");
+    halt_kernel();
+  } else{
+    print("[kernel:] unlink worked!\n");
+  }
+
+    /* Deallocate the process's memory. */
+  mm_deallocate(process_to_remove->bs); // main memory
+  deallocate(process_to_remove); // process info object
+
 
   preserved_epc = current_process->epc;
   preserved_sp = current_process->sp;
   user_base = current_process->bs;
   user_limit = current_process->lm;
+
+
 
   /* Advance to the next ROM. */
   cpu_scheduler();
@@ -362,6 +386,9 @@ void do_alarm () {
  * Initialize the running of user processes.
  */
 void run_init () {
+
+  int pid = add_process(INIT_ROM_NUMBER);
+
 
   /* Determine the user-space bounds. */
   user_base  = kernel_limit;
