@@ -165,7 +165,7 @@ init_L.str.6:
 	.asciz	"[init:  ] Unexpected result = "
 	.size	init_L.str.6, 31
 
-	.ident	"clang version 19.1.7"
+	.ident	"clang version 19.1.6"
 	.section	".note.GNU-stack","",@progbits
 	.addrsig
 	.addrsig_sym print

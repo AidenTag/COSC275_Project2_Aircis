@@ -96,7 +96,7 @@ fib_L.str.2:
 	.asciz	"\n"
 	.size	fib_L.str.2, 2
 
-	.ident	"clang version 19.1.7"
+	.ident	"clang version 19.1.6"
 	.section	".note.GNU-stack","",@progbits
 	.addrsig
 	.addrsig_sym fib

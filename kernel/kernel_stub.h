@@ -46,6 +46,13 @@ extern word_t preserved_sp;
 void userspace_jump (address_t target, address_t stack, address_t base, address_t limit);
 
 /**
+ * Enable alarm bit in user mode and set the user-level processor cycles that corresponds to the scheduling quanta. 
+ *
+ * \param quant The length of the scheduling quantum 
+ */
+void set_alarm (word_t quant);
+
+/**
  * Search the device table for the n-th instance of a particular device type.
  *
  * \param type The code for the device type for which to search.

@@ -329,7 +329,7 @@ int_to_hex.hex_digits:
 	.ascii	"0123456789abcdef"
 	.size	int_to_hex.hex_digits, 16
 
-	.ident	"clang version 19.1.7"
+	.ident	"clang version 19.1.6"
 	.section	".note.GNU-stack","",@progbits
 	.addrsig
 	.addrsig_sym int_to_hex
