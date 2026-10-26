@@ -146,6 +146,6 @@ testing_L.str.4:
 testing_L.str.5:
 	.asciz	"[heap_test:] Allocation reused freed space for ptr3 when it shouldn't have\n"
 testing_L.str.6:
-	.asciz	"[heap_test:] Allocation did not reuse freed space for ptr3\n"
+	.asciz	"[heap_test:] Allocation did not reuse freed space for ptr4\n"
 testing_L.str.7:
 	.asciz	"[heap_test:] All tests passed\n"
